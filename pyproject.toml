@@ -1,0 +1,17 @@
+[project]
+name = "django-ai-chat-widget"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django==6.*",
+    "django-environ>=0.13.0",
+    "google-genai>=1.67.0",
+    "httpx>=0.28.1",
+    "langchain==0.3.*",
+    "langchain-google-genai>=2.1.12",
+    "psycopg2-binary>=2.9.11",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.41.0",
+]

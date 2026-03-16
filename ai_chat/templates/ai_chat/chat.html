@@ -1,0 +1,90 @@
+{% extends 'ai_chat/base.html' %}
+
+{% block title %}AI Chat Widget{% endblock %}
+
+{% block content %}
+  <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        #chat-box { border: 1px solid #ddd; min-height: 300px; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+        form { display: flex; gap: 8px; }
+        input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 8px 16px; background: #0070f3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .user-msg { color: #555; margin-bottom: 4px; font-size: 0.9em; }
+        .ai-msg { background: #b40a26; padding: 12px; border-radius: 6px; margin-bottom: 16px; line-height: 1.6; }
+        .cursor::after { content: '▋'; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+    <h1>AI Chat</h1>
+
+    <!-- This div is where HTMX will inject AI responses -->
+    <div id="chat-box">
+        {% for message in messages %}
+            <div class="user-msg">You: {{ message.user_message }}</div>
+            <div class="ai-msg">AI: {{ message.ai_response }}</div>
+        {% empty %}
+            <p style="color:#999">No messages yet. Say something!</p>
+        {% endfor %}
+    </div>
+
+    <form hx-post="{% url 'clear_history' %}"
+      hx-target="#chat-box"
+      hx-swap="innerHTML">
+    {% csrf_token %}
+    <button type="submit">Clear history</button>
+</form>
+
+    <!--
+      hx-post="/chat/"     → sends POST to this URL
+      hx-target="#chat-box" → injects the response INTO this element
+      hx-swap="beforeend"  → appends (doesn't replace) so chat history builds up
+    -->
+    <form id="chat-form">
+        {% csrf_token %}
+        <input type="text" id="message-input" name="message" placeholder="Ask me anything..." required>
+        <button type="submit">Send</button>
+    </form>
+
+    <script>
+        const form = document.getElementById('chat-form');
+        const chatBox = document.getElementById('chat-box');
+        const input = document.getElementById('message-input');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();  // stop normal form submission
+
+            const message = input.value.trim();
+            if (!message) return;
+
+            // 1. Show the user's message immediately
+            chatBox.innerHTML += `<div class="user-msg">You: ${message}</div>`;
+
+            // 2. Create an empty div where AI response will stream in
+            const aiDiv = document.createElement('div');
+            aiDiv.className = 'ai-msg cursor';  // cursor class adds blinking effect
+            chatBox.appendChild(aiDiv);
+
+            input.value = '';  // clear the input
+
+            // 3. Open an SSE connection to our Django streaming endpoint
+            const url = `/stream/?message=${encodeURIComponent(message)}`;
+            const source = new EventSource(url);
+
+            // 4. Each time a chunk arrives, append it to the div
+            source.onmessage = function(event) {
+                if (event.data === '[DONE]') {
+                    // Streaming finished — close connection, remove cursor
+                    source.close();
+                    aiDiv.classList.remove('cursor');
+                    return;
+                }
+                aiDiv.textContent += event.data;  // append chunk
+                chatBox.scrollTop = chatBox.scrollHeight;  // auto-scroll
+            };
+
+            source.onerror = function() {
+                source.close();
+                aiDiv.classList.remove('cursor');
+            };
+        });
+    </script>
+{% endblock %}
